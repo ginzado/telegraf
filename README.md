@@ -1,155 +1,159 @@
+# inputs.dpdkflow
 
-# Telegraf
+ポートミラーされたスイッチからパケットを読み込みフロー情報を解析して吐き出す Telegraf プラグイン。
 
-![tiger](assets/TelegrafTiger.png "tiger")
+## 特徴
 
-[![Contribute](https://img.shields.io/badge/Contribute%20To%20Telegraf-orange.svg?logo=influx&style=for-the-badge)](https://github.com/influxdata/telegraf/blob/master/CONTRIBUTING.md) [![Slack Status](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=for-the-badge)](https://www.influxdata.com/slack) [![Circle CI](https://circleci.com/gh/influxdata/telegraf.svg?style=svg)](https://circleci.com/gh/influxdata/telegraf) [![GoDoc](https://godoc.org/github.com/influxdata/telegraf?status.svg)](https://godoc.org/github.com/influxdata/telegraf) [![Docker pulls](https://img.shields.io/docker/pulls/library/telegraf.svg)](https://hub.docker.com/_/telegraf/)
+- DPDK を用いることで取りこぼしの少ない高性能な解析。
+- MRT ダンプファイルを読み込むことで BGP フルルートがない環境でも AS 解析が可能。
 
-Telegraf is an agent for collecting, processing, aggregating, and writing metrics. Based on a
-plugin system to enable developers in the community to easily add support for additional
-metric collection. There are four distinct types of plugins:
+## 使い方
 
-1. [Input Plugins](/docs/INPUTS.md) collect metrics from the system, services, or 3rd party APIs
-2. [Processor Plugins](/docs/PROCESSORS.md) transform, decorate, and/or filter metrics
-3. [Aggregator Plugins](/docs/AGGREGATORS.md) create aggregate metrics (e.g. mean, min, max, quantiles, etc.)
-4. [Output Plugins](/docs/OUTPUTS.md) write metrics to various destinations
+以下、 Telegraf がデータを吐き出す宛先はすでに用意されているものとする。
 
-New plugins are designed to be easy to contribute, pull requests are welcomed, and we work to
-incorporate as many pull requests as possible. Consider looking at the
-[list of external plugins](EXTERNAL_PLUGINS.md) as well.
+例としては InfluxDB 2.2 の設定例を示す。
 
-## Minimum Requirements
+InfluxDB のインストールについては以下のサイトを参照。
 
-Telegraf shares the same [minimum requirements][] as Go:
+https://docs.influxdata.com/influxdb/v2.2/install/?t=Linux#
 
-- Linux kernel version 2.6.23 or later
-- Windows 7 or later
-- FreeBSD 11.2 or later
-- MacOS 10.11 El Capitan or later
+### ビルド
 
-[minimum requirements]: https://github.com/golang/go/wiki/MinimumRequirements#minimum-requirements
+まず Ubuntu 20.04 LTS の環境を用意。
 
-## Obtaining Telegraf
+Telegraf は Go で書かれているのでもし Go の環境の準備がまだなら Go の環境を用意。
 
-View the [changelog](/CHANGELOG.md) for the latest updates and changes by version.
 
-### Binary Downloads
-
-Binary downloads are available from the [InfluxData downloads](https://www.influxdata.com/downloads)
-page or from each [GitHub Releases](https://github.com/influxdata/telegraf/releases) page.
-
-### Package Repository
-
-InfluxData also provides a package repo that contains both DEB and RPM downloads.
-
-For deb-based platforms (e.g. Ubuntu and Debian) run the following to add the
-repo key and setup a new sources.list entry:
-
-```shell
-wget -qO- https://repos.influxdata.com/influxdb.key | sudo tee /etc/apt/trusted.gpg.d/influxdata.asc >/dev/null
-echo "deb https://repos.influxdata.com/debian stable main" | sudo tee /etc/apt/sources.list.d/influxdata.list
-sudo apt-get update && sudo apt-get install telegraf
+```
+~$ wget https://go.dev/dl/go1.18.1.linux-amd64.tar.gz
+~$ sudo tar -C /usr/local -xzf go1.18.1.linux-amd64.tar.gz
+~$ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.profile
 ```
 
-For RPM-based platforms (e.g. RHEL, CentOS) use the following to create a repo
-file and install telegraf:
+上記手順で `~/.profile` を書き換えたら一度ログアウトしてから再度ログイン。
 
-```shell
-cat <<EOF | sudo tee /etc/yum.repos.d/influxdata.repo
-[influxdata]
-name = InfluxData Repository - Stable
-baseurl = https://repos.influxdata.com/stable/\$basearch/main
-enabled = 1
-gpgcheck = 1
-gpgkey = https://repos.influxdata.com/influxdb.key
-EOF
-sudo yum install telegraf
+ビルドに必要なパッケージをインストールしソースコードを取得し `make` コマンド実行。
+```
+~$ sudo apt install build-essential pkgconf dpdk dpdk-dev
+~$ git clone https://github.com/ginzado/telegraf.git
+~$ cd telegraf
+~/telegraf$ git checkout -b dpdkflow origin/dpdkflow
+~/telegraf$ make
 ```
 
-### Build From Source
+いまいるディレクトリに `telegraf` という実行ファイルができる。
 
-Telegraf requires Go version 1.17 or newer, the Makefile requires GNU make.
+### 設定
 
-1. [Install Go](https://golang.org/doc/install) >=1.17 (1.17.2 recommended)
-2. Clone the Telegraf repository:
+以下のような設定ファイルを作成する。
 
-   ```shell
-   git clone https://github.com/influxdata/telegraf.git
-   ```
-
-3. Run `make` from the source directory
-
-   ```shell
-   cd telegraf
-   make
-   ```
-
-### Nightly Builds
-
-[Nightly](/docs/NIGHTLIES.md) builds are available, generated from the master branch.
-
-### 3rd Party Builds
-
-Builds for other platforms or package formats are provided by members of theTelegraf community.
-These packages are not built, tested, or supported by the Telegraf project or InfluxData. Please
-get in touch with the package author if support is needed:
-
-- [Ansible Role](https://github.com/rossmcdonald/telegraf)
-- [Chocolatey](https://chocolatey.org/packages/telegraf) by [ripclawffb](https://chocolatey.org/profiles/ripclawffb)
-- [Scoop](https://github.com/ScoopInstaller/Main/blob/master/bucket/telegraf.json)
-- [Snap](https://snapcraft.io/telegraf) by Laurent Sesquès (sajoupa)
-
-## Getting Started
-
-See usage with:
-
-```shell
-telegraf --help
+```
+[global_tags]
+[agent]
+  interval = "10s"
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = "0s"
+  flush_interval = "10s"
+  flush_jitter = "0s"
+  precision = "0s"
+  hostname = ""
+  omit_hostname = false
+[[outputs.influxdb_v2]]
+  urls = ["http://(InfluxDBのIPアドレス):8086"]
+  token = "(InfluxDBにアクセスするための認証トークン)"
+  organization = "(InfluxDBの組織名)"
+  bucket = "(InfluxDBのバケット名)"
+[[inputs.dpdkflow]]
+  main_core_index = 1
+  interval = 60
+  local_nets_ipv4 = ["192.168.1.0/24"]
+  local_nets_ipv6 = ["2001:db8:0:1::/64"]
+  aggregate_incoming = ["iface", "vlan", "af", "proto", "dst_host", "src_as", "app"]
+  aggregate_outgoing = ["iface", "vlan", "af", "proto", "src_host", "dst_as", "app"]
+  mrt_rib_path = "path/to/mrt_rib_file"
+  [[inputs.dpdkflow.core]]
+    index = 2
+    [[inputs.dpdkflow.core.port]]
+      index = 0
+      description = "Port1"
+      port_vlan_id = 1
+      tag_vlan_ids = [11, 12]
+  [[inputs.dpdkflow.core]]
+    index = 3
+    [[inputs.dpdkflow.core.port]]
+      index = 1
+      description = "Port2"
+      port_vlan_id = 13
+      tag_vlan_ids = []
 ```
 
-### Generate a telegraf config file
+`[[outputs.influxdb_v2]]` の部分は実際の InfluxDB の設定に置き換える。
 
-```shell
-telegraf config > telegraf.conf
+`[[inputs.dpdkflow]]` の部分は大体以下のような意味となる。
+
+|項目名|意味|
+|:-----|:---|
+|`main_core_index`|収集したデータを `[[outputs.influxdb_v2]]` に吐き出す処理を行う CPU コアの(DPDK 上の)インデックス番号。|
+|`interval`|フローを集約する期間。単位は秒。|
+|`local_nets_ipv4`|自ネットワークの IPv4 アドレスプレフィクス。|
+|`local_nets_ipv6`|自ネットワークの IPv6 アドレスプレフィクス。|
+|`aggregate_incoming`|外部ネットワークから自ネットワークへ入ってくるパケットを集約する際にキーとする項目(詳細後述)。|
+|`aggregate_outgoing`|自ネットワークから外部ネットワークへ出ていくパケットを集約する際にキーとする項目(詳細後述)。|
+|`aggregate_internal`|自ネットワーク間通信のパケットを集約する際にキーとする項目(詳細後述)。|
+|`aggregate_external`|外部ネットワーク間通信のパケットを集約する際にキーとする項目(詳細後述)。|
+|`mrt_rib_path`|MRT ダンプファイルへのパス。|
+|`[[inputs.dpdkflow.core]]`|DPDK でひたすらパケットを拾い続ける CPU コア 1 つ分の定義。例えば 2 つ `[[inputs.dpdkflow.core]]` を定義した場合は 2 コアでパケットを収集する。|
+|(`[[inputs.dpdkflow.core]]` の) `index`|CPU コアの(DPDK 上の)インデックス番号。例えば 0 を指定した場合 0 番目の CPU コアで処理が走る。|
+|`[[inputs.dpdkflow.core.port]]`|パケットを拾うポート 1 つ分の定義。このポートのパケットはこの定義の親の CPU コアが拾う。|
+|(`[[inputs.dpdkflow.core.port]]` の) `index`|ポートの(DPDK 上の)インデックス番号。|
+|`description`|ポートの名前。|
+|`port_vlan_id`|このポートの VLAN ID。このポートを流れる 802.1Q タグが無いフレームはこの VLAN ID として扱う。|
+|`tag_vlan_ids`|このポート上を流れる 802.1Q タグ VLAN ID。ここにない VLAN ID の 802.1Q タグ付きフレームは無視する。|
+
+集約キー(`aggregate_incoming` 等)には以下の項目を指定できる。
+
+|項目名|意味|
+|:-----|:---|
+|`iface`|フロー情報を拾ったインターフェースの `description`。|
+|`af`|アドレスファミリ(`2`(IPv4) か `10`(IPv6))。|
+|`proto`|プロトコル(`6`(TCP) や `17`(UDP) や `50`(ESP) や `47`(GRE) など)。|
+|`vlan`|VLAN ID。|
+|`src_host`|送信元 IP アドレス。|
+|`dst_host`|宛先 IP アドレス。|
+|`src_as`|送信元 AS 番号。|
+|`dst_as`|宛先 AS 番号。|
+|`src_port`|送信元ポート番号(TCP か UDP の場合のみ)。|
+|`dst_port`|宛先ポート番号(TCP か UDP の場合のみ)。|
+|`app`|プロトコル番号とサービス番号(ポート番号)の組。サービス番号は送信元ポート番号と宛先ポート番号の小さい方を採用する。|
+
+### 実行
+
+まず DPDK の実行環境の準備をする。
+
+(以下は root 権限で。)
+
 ```
-
-### Generate config with only cpu input & influxdb output plugins defined
-
-```shell
-telegraf --section-filter agent:inputs:outputs --input-filter cpu --output-filter influxdb config
+~# mountpoint -q /dev/hugepages || mount -t hugetlbfs nodev /dev/hugepages
+~# echo 1024 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
+~# modprobe uio_pci_generic
+~# dpdk-devbind.py -u 0000:03:00.0
+~# dpdk-devbind.py -u 0000:04:00.0
+~# dpdk-devbind.py -b uio_pci_generic 0000:03:00.0
+~# dpdk-devbind.py -b uio_pci_generic 0000:04:00.0
 ```
+`0000:03:00.0` や `0000:04:00.0` の部分は実際の PCI アドレスに置き換える。実際の PCI アドレスは `sudo dpdk-devbind.py -s` などして確認する。
 
-### Run a single telegraf collection, outputting metrics to stdout
+上記の例では `0000:03:00.0` がポートインデックス番号 0 に、 `0000:04:00.0` がポートインデックス番号 1 になる。
 
-```shell
-telegraf --config telegraf.conf --test
+DPDK の準備ができたら作成した設定ファイルを引数に `telegraf` を root 権限で実行する。
+
 ```
-
-### Run telegraf with all plugins defined in config file
-
-```shell
-telegraf --config telegraf.conf
+~$ sudo path/to/telegraf --config path/to/telegraf.conf
 ```
+### 補足
 
-### Run telegraf, enabling the cpu & memory input, and influxdb output plugins
-
-```shell
-telegraf --config telegraf.conf --input-filter cpu:mem --output-filter influxdb
-```
-
-## Contribute to the Project
-
-Telegraf is an MIT licensed open source project and we love our community. The fastest way to get something fixed is to open a PR. Check out our [contributing guide](CONTRIBUTING.md) if you're interested in helping out. Also, join us on our [Community Slack](https://influxdata.com/slack) or [Community Page](https://community.influxdata.com/) if you have questions or comments for our engineering teams.
-
-If your completely new to Telegraf and InfluxDB, you can also enroll for free at [InfluxDB university](https://www.influxdata.com/university/) to take courses to learn more.
-
-## Documentation
-
-[Latest Release Documentation](https://docs.influxdata.com/telegraf/latest/)
-
-For documentation on the latest development code see the [documentation index](/docs).
-
-- [Input Plugins](/docs/INPUTS.md)
-- [Output Plugins](/docs/OUTPUTS.md)
-- [Processor Plugins](/docs/PROCESSORS.md)
-- [Aggregator Plugins](/docs/AGGREGATORS.md)
+- MRT ダンプファイルは WIDE プロジェクト(Route Views プロジェクト)さんが公開されているこのへん( http://archive.routeviews.org/route-views.wide/bgpdata/2022.04/RIBS/rib.20220425.1200.bz2 )をダウンロードして使わせてもらう(それ以外の MRT ダンプファイルは未検証)。展開してファイル名を適当に変えて `mrt_rib_path` で指定すると起動時に読み込まれる(結構時間がかかる)。最新の MRT ダンプファイルに差し替えたい時は同じファイル名でファイルを差し替えると MRT ダンプファイルのタイムスタンプを見て自動的に更新しようとする。
+- 集約項目に `app` がある場合はデータストア(InfluxDB など)に送信されるデータに `app` を表す文字列が格納された `app_desc` という項目も送信される。 `app_desc` は "`tcp(6)/https(443)`" や "`udp(17)/domain(53)`" や "`esp(50)`" のようになる。`/etc/services` にサービス名の登録がないものは "`tcp(6)/unknown(12345)`" のようになる。 `/etc/protocols` にプロトコル名の登録がないものは "`unknown(123)`" のようになる。 `/etc/protocols` と `/etc/services` を書き換えるとそのタイムスタンプから自動的にデータを更新する。
+- InfluxDB はめちゃくちゃメモリを食うようなので集約の粒度を細かくする場合は適当にダウンサンプルするようにするかアホみたいにメモリを搭載したマシンで実行する。
