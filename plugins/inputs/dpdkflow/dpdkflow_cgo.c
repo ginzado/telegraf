@@ -566,7 +566,7 @@ lcore_main(struct dpdkflow_context *ctx)
 		}
 		for (int i = 0; i < deqed; i++) {
 			//metric_print(mbuf[i]);
-			//gather(mbuf[i]);
+			gather(mbuf[i]);
 			rte_mempool_put(ctx->metric_pool, (void *)mbuf[i]);
 			rte_rwlock_write_lock(&ctx->metric_stats_lock);
 			ctx->metric_sent++;
