@@ -106,7 +106,7 @@ Telegraf は Go で書かれているのでもし Go の環境の準備がまだ
 |`mrt_rib_path`|MRT ダンプファイルへのパス。|
 |`[[inputs.dpdkflow.core]]`|DPDK でひたすらパケットを拾い続ける CPU コア 1 つ分の定義。例えば 2 つ `[[inputs.dpdkflow.core]]` を定義した場合は 2 コアでパケットを収集する。|
 |(`[[inputs.dpdkflow.core]]` の) `index`|CPU コアの(DPDK 上の)インデックス番号。例えば 0 を指定した場合 0 番目の CPU コアで処理が走る。|
-|`[[inputs.dpdkflow.core.port]]`|パケットを拾うポート 1 つ分の定義。このポートのパケットはこの定義の親の CPU コアが拾う。|
+|`[[inputs.dpdkflow.core.port]]`|パケットを拾うポート 1 つ分の定義。このポートのパケットはこの定義の親の CPU コアが拾う。 1 つの CPU コアで複数のポートのパケットを拾うことも可能。その時は 1 つの `[[inputs.dpdkflow.core]]` に複数の `[[inputs.dpdkflow.core.port]]` を定義する。|
 |(`[[inputs.dpdkflow.core.port]]` の) `index`|ポートの(DPDK 上の)インデックス番号。|
 |`description`|ポートの名前。|
 |`port_vlan_id`|このポートの VLAN ID。このポートを流れる 802.1Q タグが無いフレームはこの VLAN ID として扱う。|
