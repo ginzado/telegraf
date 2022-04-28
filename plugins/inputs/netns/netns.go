@@ -127,7 +127,7 @@ func (n *Netns) gatherIpRouteCount(acc telegraf.Accumulator, ipVer int) {
 	fields := map[string]interface{}{
 		fmt.Sprintf("ip%d_routes", ipVer): routeCount,
 	}
-	acc.AddCounter(measurement, fields, tags)
+	acc.AddGauge(measurement, fields, tags)
 }
 
 func (n *Netns) Gather(acc telegraf.Accumulator) error {
