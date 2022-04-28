@@ -36,6 +36,7 @@ type DpdkFlowCore struct {
 type DpdkFlow struct {
 	MainCoreIndex     int            `toml:"main_core_index"`
 	Interval          int            `toml:"interval"`
+	MetricsNum        uint32         `toml:"metrics_num"`
 	LocalNetsIpv4     []string       `toml:"local_nets_ipv4"`
 	LocalNetsIpv6     []string       `toml:"local_nets_ipv6"`
 	AggregateIncoming []string       `toml:"aggregate_incoming"`
@@ -182,6 +183,8 @@ const sampleConfig = `
   ##
   # interval = 300
   ##
+  # metrics_num = 65536
+  ##
   # local_nets_ipv4 = ["192.168.1.0/24", 172.16.1.0/24]
   ##
   # local_nets_ipv6 = ["2001:db8:1::/48"]
@@ -224,7 +227,22 @@ func (df *DpdkFlow) Init() error {
 		return fmt.Errorf("dpdkflow cannot be started more than once")
 	}
 	if df.Interval == 0 {
+		fmt.Println("Set Interval to 300")
 		df.Interval = 300
+	}
+	if df.MetricsNum == 0 {
+		fmt.Println("Set MetricsNum to 262144")
+		df.MetricsNum = 262144
+	}
+	if df.MetricsNum != 0 {
+		t := uint32(1)
+		for t < df.MetricsNum {
+			t = t << 1
+		}
+		if t != df.MetricsNum {
+			fmt.Println("Replace MetricsNum to", t, "from", df.MetricsNum)
+			df.MetricsNum = t
+		}
 	}
 	if len(df.MrtRibPath) > 255 {
 		return fmt.Errorf("mrt_rib_path too long")
@@ -289,6 +307,7 @@ func (df *DpdkFlow) Start(acc telegraf.Accumulator) error {
 	fmt.Println("DpdkFlow.Start()")
 	fmt.Println("MainCoreIndex: ", df.MainCoreIndex)
 	fmt.Println("Interval: ", df.Interval)
+	fmt.Println("MetricsNum: ", df.MetricsNum)
 	fmt.Println("LocalNetsIpv4: ", df.LocalNetsIpv4)
 	fmt.Println("LocalNetsIpv6: ", df.LocalNetsIpv6)
 	fmt.Println("AggregateIncoming: ", df.AggregateIncoming)
@@ -313,6 +332,7 @@ func (df *DpdkFlow) Start(acc telegraf.Accumulator) error {
 		running:         0,
 		main_core_index: C.int(df.MainCoreIndex),
 		interval:        C.int(df.Interval),
+		metrics_num:     C.uint32_t(df.MetricsNum),
 	}
 
 	local_nets_ipv4_index := 0

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #include <netdb.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -56,10 +57,8 @@ extern const uint32_t aggregate_f_dst_port;
 extern const uint32_t aggregate_f_app;
 
 #define APP_TABLE_HASH_SIZE 1024
-//#define METRIC_HASH_SIZE 16384
-#define METRIC_HASH_SIZE 65536
-
 #define APP_DESC_LEN 44
+
 struct dpdkflow_app_table_entry {
 	uint32_t app;
 	char app_desc[APP_DESC_LEN];
@@ -114,6 +113,7 @@ struct dpdkflow_context {
 
 	int main_core_index;
 	int interval;
+	uint32_t metrics_num;
 	uint8_t local_nets_ipv4_pfix[LOCAL_NETS_MAX][16];
 	uint8_t local_nets_ipv4_plen[LOCAL_NETS_MAX];
 	uint8_t local_nets_ipv4_num;
@@ -152,7 +152,7 @@ struct dpdkflow_context {
 	struct timespec services_last_mtim;
 
 	/* metric */
-	struct dpdkflow_metric *metric_hash_table[METRIC_HASH_SIZE];
+	struct dpdkflow_metric **metric_hash_table;
 	struct dpdkflow_metric *metric_list_head;
 	struct dpdkflow_metric *metric_list_tail;
 	rte_rwlock_t metric_lock;

@@ -586,14 +586,46 @@ print_stats(struct dpdkflow_context *ctx)
 	char buf[256];
 	char buf2[128];
 	char *p = buf;
-	sprintf(p, "stats: ");
-	p += strlen("stats: ");
+	time_t rawtime;
+	struct tm * timeinfo;
+
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+	sprintf(buf2, "%s", asctime(timeinfo));
+	sprintf(p, "%s", buf2);
+	p += strlen(buf2) - 1;
+
+	sprintf(p, " stats: ");
+	p += strlen(" stats: ");
+
 	sprintf(buf2, "sent = %8ld alloced = %8ld getfailed = %8ld ",
 			(ctx->metric_sent - sent_last),
 			ctx->metric_alloced,
 			(ctx->metric_getfailed - getfailed_last));
 	sprintf(p, "%s", buf2);
 	p += strlen(buf2);
+
+	/*
+	{
+		int maxdepth = 0;
+		for (int i = 0; i < ctx->metrics_num; i++) {
+			struct dpdkflow_metric *tmp;
+			int depth = 0;
+			rte_rwlock_read_lock(&ctx->metric_lock);
+			for (tmp = ctx->metric_hash_table[i]; tmp != NULL; tmp = tmp->hash_next) {
+				depth++;
+			}
+			rte_rwlock_read_unlock(&ctx->metric_lock);
+			if (depth > maxdepth) {
+				maxdepth = depth;
+			}
+		}
+		sprintf(buf2, "maxdepth = %4d ", maxdepth);
+		sprintf(p, "%s", buf2);
+		p += strlen(buf2);
+	}
+	*/
+
 	sent_last = ctx->metric_sent;
 	getfailed_last = ctx->metric_getfailed;
 	for (int i = 0; i < ctx->core_num; i++) {
@@ -610,7 +642,10 @@ print_stats(struct dpdkflow_context *ctx)
 			rx_nombuf_last[ctx->cores[i].ports[j].index] = stats.rx_nombuf;
 		}
 	}
+
 	sprintf(p, "\n");
+	p += strlen("\n");
+
 	printf("%s", buf);
 }
 
@@ -690,7 +725,7 @@ start(struct dpdkflow_context *ctx)
 	}
 
 	ctx->metric_pool = rte_mempool_create("metric_pool",
-			NUM_METRICS, sizeof(struct dpdkflow_metric), 0, 0, NULL, NULL, NULL, NULL, rte_socket_id(), 0);
+			ctx->metrics_num, sizeof(struct dpdkflow_metric), 0, 0, NULL, NULL, NULL, NULL, rte_socket_id(), 0);
 	if (ctx->metric_pool == NULL) {
 		printf("start: metric_pool create failed\n");
 		return -1;

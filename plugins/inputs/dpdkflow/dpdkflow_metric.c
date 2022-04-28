@@ -55,6 +55,8 @@ metric_equals(struct dpdkflow_context *ctx, struct dpdkflow_metric *m1, struct d
 inline uint32_t
 metric_hash(struct dpdkflow_context *ctx, struct dpdkflow_metric *m)
 {
+	uint32_t hash = 0;
+	/*
 	uint32_t hash = (uint32_t)m->direction << 12;
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_iface)) {
 		hash += m->iface;
@@ -68,35 +70,32 @@ metric_hash(struct dpdkflow_context *ctx, struct dpdkflow_metric *m)
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_vlan)) {
 		hash += m->vlan;
 	}
+	*/
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_src_host)) {
-		for (int i = 0; i < 4; i++) {
-			hash += ntohl(*(uint32_t *)&m->src_host[i * 4]);
-		}
+		hash += ntohl(*(uint32_t *)&m->src_host[12]);
 	}
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_dst_host)) {
-		for (int i = 0; i < 4; i++) {
-			hash += ntohl(*(uint32_t *)&m->dst_host[i * 4]);
-		}
+		hash += ntohl(*(uint32_t *)&m->dst_host[12]);
 	}
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_src_as)) {
-		hash += m->src_as;
+		hash += ((uint32_t)m->src_as << 4) | ((uint32_t)m->src_as >> 28);
 	}
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_dst_as)) {
-		hash += m->dst_as;
+		hash += ((uint32_t)m->dst_as << 4) | ((uint32_t)m->dst_as >> 28);
 	}
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_src_port)) {
-		hash += m->src_port;
+		hash += ((uint32_t)m->src_port << 8) | ((uint32_t)m->src_port >> 24);
 	}
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_dst_port)) {
-		hash += m->dst_port;
+		hash += ((uint32_t)m->dst_port << 8) | ((uint32_t)m->dst_port >> 24);
 	}
 	if (aggregate_flag_up(ctx, m->direction, aggregate_f_app)) {
-		hash += m->app;
+		hash += ((uint32_t)m->app << 12) | ((uint32_t)m->app >> 20);
 	}
 	hash ^= (hash >> 20);
 	hash ^= (hash >> 10);
 	hash ^= (hash >> 5);
-	hash &= METRIC_HASH_SIZE - 1;
+	hash &= ctx->metrics_num - 1;
 	return hash;
 }
 
@@ -201,7 +200,10 @@ metric_update(struct dpdkflow_context *ctx, struct dpdkflow_metric *m, int *stor
 inline void
 metric_print(struct dpdkflow_metric *m)
 {
-	printf("%2d %2d %2d %2d %4d %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %10ld %10ld %6d %6d %08x %s\n",
+	printf("%2d %2d %2d %2d %4d "
+	       "%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x "
+	       "%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x "
+	       "%10ld %10ld %6d %6d %08x %s\n",
 			m->iface,
 			m->direction,
 			m->af,
@@ -241,7 +243,8 @@ metric_context_init(struct dpdkflow_context *ctx)
 {
 	printf("metric_context_init\n");
 
-	for (int i = 0; i < METRIC_HASH_SIZE; i++) {
+	ctx->metric_hash_table = malloc(sizeof(struct dpdkflow_metric *) * ctx->metrics_num);
+	for (int i = 0; i < ctx->metrics_num; i++) {
 		ctx->metric_hash_table[i] = NULL;
 	}
 	ctx->metric_list_head = NULL;
