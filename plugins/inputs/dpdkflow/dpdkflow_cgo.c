@@ -566,12 +566,21 @@ lcore_main(struct dpdkflow_context *ctx)
 		}
 		for (int i = 0; i < deqed; i++) {
 			//metric_print(mbuf[i]);
-			gather(mbuf[i]);
-			rte_mempool_put(ctx->metric_pool, (void *)mbuf[i]);
-			rte_rwlock_write_lock(&ctx->metric_stats_lock);
-			ctx->metric_sent++;
-			ctx->metric_alloced--;
-			rte_rwlock_write_unlock(&ctx->metric_stats_lock);
+			if ((ctx->thresh_packets > 0 && mbuf[i]->packets < ctx->thresh_packets)
+			 || (ctx->thresh_bytes > 0 && mbuf[i]->bytes < ctx->thresh_bytes)) {
+				rte_mempool_put(ctx->metric_pool, (void *)mbuf[i]);
+				rte_rwlock_write_lock(&ctx->metric_stats_lock);
+				ctx->metric_ignored++;
+				ctx->metric_alloced--;
+				rte_rwlock_write_unlock(&ctx->metric_stats_lock);
+			} else {
+				gather(mbuf[i]);
+				rte_mempool_put(ctx->metric_pool, (void *)mbuf[i]);
+				rte_rwlock_write_lock(&ctx->metric_stats_lock);
+				ctx->metric_sent++;
+				ctx->metric_alloced--;
+				rte_rwlock_write_unlock(&ctx->metric_stats_lock);
+			}
 		}
 	}
 }
@@ -581,6 +590,7 @@ print_stats(struct dpdkflow_context *ctx)
 {
 	static uint64_t sent_last = 0;
 	static uint64_t getfailed_last = 0;
+	static uint64_t ignored_last = 0;
 	static uint64_t imissed_last[PORT_MAX] = {0};
 	static uint64_t rx_nombuf_last[PORT_MAX] = {0};
 	char buf[256];
@@ -598,8 +608,9 @@ print_stats(struct dpdkflow_context *ctx)
 	sprintf(p, " stats: ");
 	p += strlen(" stats: ");
 
-	sprintf(buf2, "sent = %8ld alloced = %8ld getfailed = %8ld ",
+	sprintf(buf2, "sent = %8ld ignored = %8ld alloced = %8ld getfailed = %8ld ",
 			(ctx->metric_sent - sent_last),
+			(ctx->metric_ignored - ignored_last),
 			ctx->metric_alloced,
 			(ctx->metric_getfailed - getfailed_last));
 	sprintf(p, "%s", buf2);
@@ -628,6 +639,7 @@ print_stats(struct dpdkflow_context *ctx)
 
 	sent_last = ctx->metric_sent;
 	getfailed_last = ctx->metric_getfailed;
+	ignored_last = ctx->metric_ignored;
 	for (int i = 0; i < ctx->core_num; i++) {
 		for (int j = 0; j < ctx->cores[i].port_num; j++) {
 			struct rte_eth_stats stats;
@@ -673,6 +685,7 @@ context_init(struct dpdkflow_context *ctx)
 	ctx->metric_sent = 0;
 	ctx->metric_alloced = 0;
 	ctx->metric_getfailed = 0;
+	ctx->metric_ignored = 0;
 	rte_rwlock_init(&ctx->metric_stats_lock);
 
 	mrt_rib_context_init(ctx);

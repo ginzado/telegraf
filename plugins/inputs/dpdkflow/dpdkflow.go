@@ -37,6 +37,8 @@ type DpdkFlow struct {
 	MainCoreIndex     int            `toml:"main_core_index"`
 	Interval          int            `toml:"interval"`
 	MetricsNum        uint32         `toml:"metrics_num"`
+	ThreshPackets     uint32         `toml:"thresh_packets"`
+	ThreshBytes       uint32         `toml:"thresh_bytes"`
 	LocalNetsIpv4     []string       `toml:"local_nets_ipv4"`
 	LocalNetsIpv6     []string       `toml:"local_nets_ipv6"`
 	AggregateIncoming []string       `toml:"aggregate_incoming"`
@@ -152,28 +154,68 @@ func aggregateFlags(aggregate []string) (uint32, error) {
 
 //export gather
 func gather(d *C.struct_dpdkflow_metric) int {
+	/*
+		tags := map[string]string{
+			"iface":     ifaceStr(int8(d.iface)),
+			"direction": directionStr(int8(d.direction)),
+			"af":        afStr(uint8(d.af)),
+			"proto":     fmt.Sprint(uint8(d.proto)),
+			"vlan":      fmt.Sprint(int32(d.vlan)),
+			"src_host":  hostStr(unsafe.Pointer(&d.src_host[0])),
+			"dst_host":  hostStr(unsafe.Pointer(&d.dst_host[0])),
+			"src_as":    fmt.Sprint(int64(d.src_as)),
+			"dst_as":    fmt.Sprint(int64(d.dst_as)),
+			"src_port":  fmt.Sprint(int(d.src_port)),
+			"dst_port":  fmt.Sprint(int(d.dst_port)),
+			"app":       fmt.Sprintf("%08x", uint32(d.app)),
+			"app_desc":  C.GoString(&d.app_desc[0]),
+		}
+	*/
+	if globalDf == nil {
+		return 0
+	}
 	tags := map[string]string{
-		"iface":     ifaceStr(int8(d.iface)),
 		"direction": directionStr(int8(d.direction)),
-		"af":        afStr(uint8(d.af)),
-		"proto":     fmt.Sprint(uint8(d.proto)),
-		"vlan":      fmt.Sprint(int32(d.vlan)),
-		"src_host":  hostStr(unsafe.Pointer(&d.src_host[0])),
-		"dst_host":  hostStr(unsafe.Pointer(&d.dst_host[0])),
-		"src_as":    fmt.Sprint(int64(d.src_as)),
-		"dst_as":    fmt.Sprint(int64(d.dst_as)),
-		"src_port":  fmt.Sprint(int(d.src_port)),
-		"dst_port":  fmt.Sprint(int(d.dst_port)),
-		"app":       fmt.Sprintf("%08x", uint32(d.app)),
-		"app_desc":  C.GoString(&d.app_desc[0]),
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_iface) == 1 {
+		tags["iface"] = ifaceStr(int8(d.iface))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_af) == 1 {
+		tags["af"] = afStr(uint8(d.af))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_proto) == 1 {
+		tags["proto"] = fmt.Sprint(uint8(d.proto))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_vlan) == 1 {
+		tags["vlan"] = fmt.Sprint(int32(d.vlan))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_src_host) == 1 {
+		tags["src_host"] = hostStr(unsafe.Pointer(&d.src_host[0]))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_dst_host) == 1 {
+		tags["dst_host"] = hostStr(unsafe.Pointer(&d.dst_host[0]))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_src_as) == 1 {
+		tags["src_as"] = fmt.Sprint(int64(d.src_as))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_dst_as) == 1 {
+		tags["dst_as"] = fmt.Sprint(int64(d.dst_as))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_src_port) == 1 {
+		tags["src_port"] = fmt.Sprint(int(d.src_port))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_dst_port) == 1 {
+		tags["dst_port"] = fmt.Sprint(int(d.dst_port))
+	}
+	if C.aggregate_flag_up(globalDf.ctx, d.direction, C.aggregate_f_app) == 1 {
+		tags["app"] = fmt.Sprintf("%08x", uint32(d.app))
+		tags["app_desc"] = C.GoString(&d.app_desc[0])
 	}
 	fields := map[string]interface{}{
 		"packets": uint64(d.packets),
 		"bytes":   uint64(d.bytes),
 	}
-	if globalDf != nil {
-		globalDf.acc.AddGauge("dpdkflow", fields, tags, time.Now())
-	}
+	globalDf.acc.AddGauge("dpdkflow", fields, tags, time.Now())
 	return 0
 }
 
@@ -184,6 +226,10 @@ const sampleConfig = `
   # interval = 300
   ##
   # metrics_num = 65536
+  ##
+  # thresh_packets = 10
+  ##
+  # thresh_bytes = 600
   ##
   # local_nets_ipv4 = ["192.168.1.0/24", 172.16.1.0/24]
   ##
@@ -308,6 +354,8 @@ func (df *DpdkFlow) Start(acc telegraf.Accumulator) error {
 	fmt.Println("MainCoreIndex: ", df.MainCoreIndex)
 	fmt.Println("Interval: ", df.Interval)
 	fmt.Println("MetricsNum: ", df.MetricsNum)
+	fmt.Println("ThreshPackets: ", df.ThreshPackets)
+	fmt.Println("ThreshBytes: ", df.ThreshBytes)
 	fmt.Println("LocalNetsIpv4: ", df.LocalNetsIpv4)
 	fmt.Println("LocalNetsIpv6: ", df.LocalNetsIpv6)
 	fmt.Println("AggregateIncoming: ", df.AggregateIncoming)
@@ -333,6 +381,8 @@ func (df *DpdkFlow) Start(acc telegraf.Accumulator) error {
 		main_core_index: C.int(df.MainCoreIndex),
 		interval:        C.int(df.Interval),
 		metrics_num:     C.uint32_t(df.MetricsNum),
+		thresh_packets:  C.uint32_t(df.ThreshPackets),
+		thresh_bytes:    C.uint32_t(df.ThreshBytes),
 	}
 
 	local_nets_ipv4_index := 0

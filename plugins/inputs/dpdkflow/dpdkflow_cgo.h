@@ -114,6 +114,8 @@ struct dpdkflow_context {
 	int main_core_index;
 	int interval;
 	uint32_t metrics_num;
+	uint32_t thresh_packets;
+	uint32_t thresh_bytes;
 	uint8_t local_nets_ipv4_pfix[LOCAL_NETS_MAX][16];
 	uint8_t local_nets_ipv4_plen[LOCAL_NETS_MAX];
 	uint8_t local_nets_ipv4_num;
@@ -134,6 +136,7 @@ struct dpdkflow_context {
 	uint64_t metric_sent;
 	uint64_t metric_alloced;
 	uint64_t metric_getfailed;
+	uint64_t metric_ignored;
 	rte_rwlock_t metric_stats_lock;
 
 	/* mrt_rib */
