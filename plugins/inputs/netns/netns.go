@@ -16,17 +16,21 @@ import (
 )
 
 type Netns struct {
-	Netns                 string
-	Timeout               config.Duration
-	CollectIpv4RouteCount bool
-	CollectIpv6RouteCount bool
+	Netns                   string          `toml:"netns"`
+	Timeout                 config.Duration `toml:"timeout"`
+	CollectIpv4RouteCount   bool            `toml:"collect_ipv4_route_count"`
+	CollectIpv6RouteCount   bool            `toml:"collect_ipv6_route_count"`
+	Ipv4RouteCountProtocols []string        `toml:"ipv4_route_count_protocols"`
+	Ipv6RouteCountProtocols []string        `toml:"ipv6_route_count_protocols"`
 }
 
 const measurement = "netns"
 
 var defaultTimeout = config.Duration(time.Second)
 
-var re = regexp.MustCompile(`^\s*(vlan\d+):\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$`)
+var reIfStats = regexp.MustCompile(`^\s*(vlan\d+):\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$`)
+
+var reIpRouteCountProtocol = regexp.MustCompile(`^\s*(\d+) of .* networks in table master(\d)`)
 
 func (n *Netns) Init() error {
 	_, err := exec.LookPath("ip")
@@ -56,7 +60,7 @@ func (n *Netns) gatherIfStats(acc telegraf.Accumulator) {
 	scanner := bufio.NewScanner(&out)
 	for scanner.Scan() {
 		line := scanner.Text()
-		result := re.FindStringSubmatch(line)
+		result := reIfStats.FindStringSubmatch(line)
 		if result == nil || len(result) != 18 {
 			continue
 		}
@@ -102,14 +106,14 @@ func (n *Netns) gatherIfStats(acc telegraf.Accumulator) {
 
 }
 
-func (n *Netns) gatherIpRouteCount(acc telegraf.Accumulator, ipVer int) {
-	ipPath, err := exec.LookPath("ip")
+func (n *Netns) gatherIpRouteCountProtocol(acc telegraf.Accumulator, ipVer int, protocol string) {
+	birdcPath, err := exec.LookPath("birdc")
 	if err != nil {
 		return
 	}
 
-	cmdName := ipPath
-	cmd := exec.Command(cmdName, "netns", "exec", n.Netns, "ip", fmt.Sprintf("-%d", ipVer), "route")
+	cmdName := birdcPath
+	cmd := exec.Command(cmdName, "show", "route", "protocol", protocol, "count")
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -118,27 +122,39 @@ func (n *Netns) gatherIpRouteCount(acc telegraf.Accumulator, ipVer int) {
 		return
 	}
 
-	var routeCount uint64
 	scanner := bufio.NewScanner(&out)
 	for scanner.Scan() {
-		_ = scanner.Text()
-		routeCount += 1
+		line := scanner.Text()
+		result := reIpRouteCountProtocol.FindStringSubmatch(line)
+		if result == nil || len(result) != 3 {
+			continue
+		}
+		routeCount, _ := strconv.ParseUint(result[1], 10, 64)
+		masterVer, _ := strconv.Atoi(result[2])
+		if masterVer != ipVer {
+			continue
+		}
+		tags := map[string]string{
+			"protocol": protocol,
+		}
+		fields := map[string]interface{}{
+			fmt.Sprintf("ip%d_routes", ipVer): routeCount,
+		}
+		acc.AddGauge(measurement, fields, tags)
 	}
-
-	tags := map[string]string{}
-	fields := map[string]interface{}{
-		fmt.Sprintf("ip%d_routes", ipVer): routeCount,
-	}
-	acc.AddGauge(measurement, fields, tags)
 }
 
 func (n *Netns) Gather(acc telegraf.Accumulator) error {
 	n.gatherIfStats(acc)
 	if n.CollectIpv4RouteCount {
-		n.gatherIpRouteCount(acc, 4)
+		for _, protocol := range n.Ipv4RouteCountProtocols {
+			n.gatherIpRouteCountProtocol(acc, 4, protocol)
+		}
 	}
 	if n.CollectIpv6RouteCount {
-		n.gatherIpRouteCount(acc, 6)
+		for _, protocol := range n.Ipv6RouteCountProtocols {
+			n.gatherIpRouteCountProtocol(acc, 6, protocol)
+		}
 	}
 	return nil
 }
