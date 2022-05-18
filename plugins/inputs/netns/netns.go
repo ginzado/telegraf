@@ -16,8 +16,10 @@ import (
 )
 
 type Netns struct {
-	Netns   string
-	Timeout config.Duration
+	Netns                 string
+	Timeout               config.Duration
+	CollectIpv4RouteCount bool
+	CollectIpv6RouteCount bool
 }
 
 const measurement = "netns"
@@ -132,8 +134,12 @@ func (n *Netns) gatherIpRouteCount(acc telegraf.Accumulator, ipVer int) {
 
 func (n *Netns) Gather(acc telegraf.Accumulator) error {
 	n.gatherIfStats(acc)
-	n.gatherIpRouteCount(acc, 4)
-	n.gatherIpRouteCount(acc, 6)
+	if n.CollectIpv4RouteCount {
+		n.gatherIpRouteCount(acc, 4)
+	}
+	if n.CollectIpv6RouteCount {
+		n.gatherIpRouteCount(acc, 6)
+	}
 	return nil
 }
 
