@@ -104,6 +104,7 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/inputs/logstash"
 	_ "github.com/influxdata/telegraf/plugins/inputs/lustre2"
 	_ "github.com/influxdata/telegraf/plugins/inputs/lvm"
+	_ "github.com/influxdata/telegraf/plugins/inputs/lxd"
 	_ "github.com/influxdata/telegraf/plugins/inputs/mailchimp"
 	_ "github.com/influxdata/telegraf/plugins/inputs/marklogic"
 	_ "github.com/influxdata/telegraf/plugins/inputs/mcrouter"
