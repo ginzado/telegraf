@@ -7,6 +7,18 @@ struct mrt_hdr {
 	uint32_t length;
 };
 
+static inline int
+exceeded(uint8_t *curr, uint8_t *head, int size)
+{
+	return ((size_t)curr >= (size_t)head + size);
+}
+
+static inline int
+included(uint8_t *curr, uint8_t *head, int size)
+{
+	return ((size_t)curr <= (size_t)head + size);
+}
+
 void
 mrt_rib_table_add_ipv4(struct rte_lpm *lpm4, uint8_t *prefix, uint8_t prefix_len, uint32_t as_num)
 {
@@ -26,12 +38,20 @@ parse_as_path_attrs(char *buf, int len)
 	//printf("parse_as_path_attrs: \n");
 	uint32_t last_as_num = 0;
 	uint8_t *p = buf;
-	while ((size_t)p < (size_t)buf + len) {
+	while (!exceeded(p, buf, len)) {
+		if (!included(p + 2, buf, len)) {
+			printf("parse_as_path_attrs: invalid data (1)\n");
+			return last_as_num;
+		}
 		uint8_t segment_type = p[0];
 		uint8_t segment_length = p[1];
 		p += 2;
 		uint32_t *as_num = (uint32_t *)p;
 		p += 4 * segment_length;
+		if (!included(p, buf, len)) {
+			printf("parse_as_path_attrs: invalid data (2)\n");
+			return last_as_num;
+		}
 		for (int i = 0; i < segment_length; i++) {
 			last_as_num = ntohl(*as_num);
 			as_num++;
@@ -45,7 +65,11 @@ parse_attrs(uint8_t *buf, int len)
 {
 	//printf("parse_attrs: \n");
 	uint8_t *p = buf;
-	while ((size_t)p < (size_t)buf + len) {
+	while (!exceeded(p, buf, len)) {
+		if (!included(p + 2, buf, len)) {
+			printf("parse_attrs: invalid data (1)\n");
+			return 0;
+		}
 		uint8_t attr_flags = p[0];
 		uint8_t attr_type_code = p[1];
 		uint16_t attr_len;
@@ -56,6 +80,10 @@ parse_attrs(uint8_t *buf, int len)
 		} else {
 			attr_len = *p;
 			p += 1;
+		}
+		if (!included(p + attr_len, buf, len)) {
+			printf("parse_attrs: invalid data (2)\n");
+			return 0;
 		}
 		if (attr_type_code == 2) {
 			return parse_as_path_attrs(p, attr_len);
@@ -77,6 +105,10 @@ parse_rib(uint8_t *buf, int len, uint16_t subtype, struct rte_lpm *lpm_ipv4, str
 
 	//printf("parse_rib: \n");
 
+	if (!included(p + sizeof(uint32_t) + sizeof(uint8_t), buf, len)) {
+		printf("parse_rib: invalid data (1)\n");
+		return;
+	}
 	seq_num = ntohl(*(uint32_t *)p);
 	p += sizeof(uint32_t);
 	prefix_len = *p;
@@ -85,9 +117,17 @@ parse_rib(uint8_t *buf, int len, uint16_t subtype, struct rte_lpm *lpm_ipv4, str
 	memcpy(prefix, p, array_len);
 	memset(prefix + array_len, 0, 16 - array_len);
 	p += array_len;
+	if (!included(p + sizeof(uint16_t), buf, len)) {
+		printf("parse_rib: invalid data (2)\n");
+		return;
+	}
 	entry_count = ntohs(*(uint16_t *)p);
 	p += sizeof(uint16_t);
 	for (int i = 0; i < entry_count; i++) {
+		if (!included(p + sizeof(uint16_t) + sizeof(uint32_t) + sizeof(uint16_t), buf, len)) {
+			printf("parse_rib: invalid data (3)\n");
+			return;
+		}
 		uint32_t as_num;
 		uint16_t peer_index = ntohs(*(uint16_t *)p);
 		p += sizeof(uint16_t);
@@ -95,6 +135,10 @@ parse_rib(uint8_t *buf, int len, uint16_t subtype, struct rte_lpm *lpm_ipv4, str
 		p += sizeof(uint32_t);
 		uint16_t attr_len = ntohs(*(uint16_t *)p);
 		p += sizeof(uint16_t);
+		if (!included(p + attr_len, buf, len)) {
+			printf("parse_rib: invalid data (4)\n");
+			return;
+		}
 		as_num = parse_attrs(p, attr_len);
 		p += attr_len;
 		/*
